@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from .database import engine, get_db
 from . import models, schemas, crud
+from .ai_parser import parse_transaction
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -49,6 +51,30 @@ def root():
         "tagline": "Financial wisdom, passed down.",
         "docs": "/docs",
     }
+
+
+# ============== AI Parsing Endpoint ==============
+
+class ParseRequest(BaseModel):
+    text: str
+
+class ParseResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None
+    error: Optional[str] = None
+
+@app.post("/api/parse", response_model=ParseResponse)
+def parse_transaction_text(request: ParseRequest):
+    """
+    Parse natural language into structured transaction data using AI.
+    
+    Example inputs:
+    - "Starbucks $8.45"
+    - "Uber ride 15"
+    - "Paycheck $2500"
+    """
+    result = parse_transaction(request.text)
+    return result
 
 
 # ============== Category Endpoints ==============
@@ -112,6 +138,26 @@ def create_transaction(transaction: schemas.TransactionCreate, db: Session = Dep
     if not category:
         raise HTTPException(status_code=400, detail="Invalid category_id")
     return crud.create_transaction(db, transaction)
+
+
+@app.put("/api/transactions/{transaction_id}", response_model=schemas.Transaction)
+def update_transaction(
+    transaction_id: int,
+    transaction: schemas.TransactionCreate,
+    db: Session = Depends(get_db)
+):
+    """Update an existing transaction."""
+    # Verify transaction exists
+    existing = crud.get_transaction(db, transaction_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Verify category exists
+    category = crud.get_category(db, transaction.category_id)
+    if not category:
+        raise HTTPException(status_code=400, detail="Invalid category_id")
+    
+    return crud.update_transaction(db, transaction_id, transaction)
 
 
 @app.delete("/api/transactions/{transaction_id}", status_code=204)

@@ -23,13 +23,16 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({
-    amount: '',
-    description: '',
-    transaction_type: 'expense',
-    category_id: '',
-    date: new Date().toISOString().split('T')[0],
-  });
+  
+  // Notes-style input state
+  const [inputText, setInputText] = useState('');
+  const [parsedData, setParsedData] = useState(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  
+  // Edit modal state
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editFormData, setEditFormData] = useState(null);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -49,51 +52,81 @@ function App() {
       setTransactions(transData);
       setCategories(catData);
       setAnalytics(analyticsData);
-
-      // Set default category
-      if (catData.length > 0 && !formData.category_id) {
-        setFormData(prev => ({ ...prev, category_id: catData[0].id }));
-      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  }, [formData.category_id]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  // Get category ID by name
+  const getCategoryId = (categoryName) => {
+    const cat = categories.find(c => c.name === categoryName);
+    return cat ? cat.id : categories[0]?.id;
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Parse natural language input with AI
+  const handleParseInput = async () => {
+    if (!inputText.trim()) return;
     
+    setIsParsing(true);
+    try {
+      const response = await fetch(`${API_URL}/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputText }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setParsedData({
+          ...result.data,
+          category_id: getCategoryId(result.data.category),
+          date: new Date().toISOString().split('T')[0],
+        });
+        setShowConfirm(true);
+      } else {
+        alert('Could not parse transaction. Try: "Starbucks $8.45" or "Paycheck $2500"');
+      }
+    } catch (error) {
+      console.error('Error parsing:', error);
+      alert('Error connecting to AI. Please try again.');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  // Handle Enter key in input
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !isParsing) {
+      handleParseInput();
+    }
+  };
+
+  // Confirm and save parsed transaction
+  const handleConfirmTransaction = async () => {
     try {
       const response = await fetch(`${API_URL}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
-          amount: parseFloat(formData.amount),
-          category_id: parseInt(formData.category_id),
-          date: new Date(formData.date).toISOString(),
+          amount: parseFloat(parsedData.amount),
+          description: parsedData.description,
+          transaction_type: parsedData.transaction_type,
+          category_id: parseInt(parsedData.category_id),
+          date: new Date(parsedData.date).toISOString(),
         }),
       });
 
       if (response.ok) {
-        setFormData(prev => ({
-          ...prev,
-          amount: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0],
-        }));
+        setInputText('');
+        setParsedData(null);
+        setShowConfirm(false);
         fetchData();
       }
     } catch (error) {
@@ -101,8 +134,58 @@ function App() {
     }
   };
 
+  // Cancel parsed transaction
+  const handleCancelParse = () => {
+    setParsedData(null);
+    setShowConfirm(false);
+  };
+
+  // Open edit modal
+  const handleEditClick = (transaction) => {
+    setEditingTransaction(transaction);
+    setEditFormData({
+      amount: transaction.amount,
+      description: transaction.description,
+      transaction_type: transaction.transaction_type,
+      category_id: transaction.category.id,
+      date: transaction.date.split('T')[0],
+    });
+  };
+
+  // Handle edit form changes
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Save edited transaction
+  const handleSaveEdit = async () => {
+    try {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...editFormData,
+          amount: parseFloat(editFormData.amount),
+          category_id: parseInt(editFormData.category_id),
+          date: new Date(editFormData.date).toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        setEditingTransaction(null);
+        setEditFormData(null);
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+    }
+  };
+
   // Handle transaction deletion
   const handleDelete = async (id) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    
     try {
       const response = await fetch(`${API_URL}/transactions/${id}`, {
         method: 'DELETE',
@@ -129,7 +212,6 @@ function App() {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
     });
   };
 
@@ -187,6 +269,81 @@ function App() {
       </header>
 
       <main className="main">
+        {/* AI Input Section */}
+        <div className="ai-input-section">
+          <div className="ai-input-container">
+            <input
+              type="text"
+              className="ai-input"
+              placeholder='Type a transaction... (e.g., "Starbucks $8.45" or "Paycheck $2500")'
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isParsing}
+            />
+            <button 
+              className="ai-input-btn"
+              onClick={handleParseInput}
+              disabled={isParsing || !inputText.trim()}
+            >
+              {isParsing ? '...' : '→'}
+            </button>
+          </div>
+          
+          {/* Confirmation Card */}
+          {showConfirm && parsedData && (
+            <div className="confirm-card">
+              <div className="confirm-header">
+                <span className="confirm-label">Nonna understood:</span>
+              </div>
+              <div className="confirm-details">
+                <div className="confirm-row">
+                  <span className="confirm-description">{parsedData.description}</span>
+                  <span className={`confirm-amount ${parsedData.transaction_type}`}>
+                    {parsedData.transaction_type === 'expense' ? '-' : '+'}
+                    {formatCurrency(parsedData.amount)}
+                  </span>
+                </div>
+                <div className="confirm-meta">
+                  <select
+                    value={parsedData.category_id}
+                    onChange={(e) => setParsedData(prev => ({ ...prev, category_id: e.target.value }))}
+                    className="confirm-select"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    value={parsedData.date}
+                    onChange={(e) => setParsedData(prev => ({ ...prev, date: e.target.value }))}
+                    className="confirm-date"
+                  />
+                  <div className="confirm-type-toggle">
+                    <button
+                      className={parsedData.transaction_type === 'expense' ? 'active' : ''}
+                      onClick={() => setParsedData(prev => ({ ...prev, transaction_type: 'expense' }))}
+                    >
+                      Expense
+                    </button>
+                    <button
+                      className={parsedData.transaction_type === 'income' ? 'active' : ''}
+                      onClick={() => setParsedData(prev => ({ ...prev, transaction_type: 'income' }))}
+                    >
+                      Income
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="confirm-actions">
+                <button className="btn-cancel" onClick={handleCancelParse}>Cancel</button>
+                <button className="btn-confirm" onClick={handleConfirmTransaction}>Add Transaction</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Summary Cards */}
         <div className="summary-grid">
           <div className="summary-card income">
@@ -218,13 +375,17 @@ function App() {
 
             {transactions.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-state-icon">📝</div>
-                <p className="empty-state-text">No transactions yet. Add your first one!</p>
+                <div className="empty-state-icon">👓</div>
+                <p className="empty-state-text">No transactions yet. Type one above!</p>
               </div>
             ) : (
               <div className="transactions-list">
                 {transactions.map((transaction) => (
-                  <div key={transaction.id} className="transaction-item">
+                  <div 
+                    key={transaction.id} 
+                    className="transaction-item"
+                    onClick={() => handleEditClick(transaction)}
+                  >
                     <div className="transaction-info">
                       <div
                         className="transaction-category"
@@ -235,22 +396,28 @@ function App() {
                           {transaction.description}
                         </div>
                         <div className="transaction-meta">
-                          {transaction.category.name} • {formatDate(transaction.date)}
+                          {transaction.category.name}
                         </div>
                       </div>
                     </div>
-                    <div className={`transaction-amount ${transaction.transaction_type}`}>
-                      {transaction.transaction_type === 'expense' ? '-' : '+'}
-                      {formatCurrency(transaction.amount)}
-                    </div>
-                    <div className="transaction-actions">
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDelete(transaction.id)}
-                        title="Delete"
-                      >
-                        ✕
-                      </button>
+                    <div className="transaction-right">
+                      <div className={`transaction-amount ${transaction.transaction_type}`}>
+                        {transaction.transaction_type === 'expense' ? '-' : '+'}
+                        {formatCurrency(transaction.amount)}
+                      </div>
+                      <div className="transaction-date">
+                        {formatDate(transaction.date)}
+                        <button
+                          className="btn-edit"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(transaction);
+                          }}
+                          title="Edit"
+                        >
+                          ✎
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -258,116 +425,114 @@ function App() {
             )}
           </div>
 
-          {/* Sidebar */}
-          <div>
-            {/* Add Transaction Form */}
-            <div className="card" style={{ marginBottom: '1.5rem' }}>
-              <div className="card-header">
-                <h2 className="card-title">Add Transaction</h2>
+          {/* Sidebar - Chart */}
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">Spending by Category</h2>
+            </div>
+
+            {chartData ? (
+              <div className="chart-container">
+                <Doughnut data={chartData} options={chartOptions} />
               </div>
+            ) : (
+              <div className="empty-state">
+                <p className="empty-state-text">Add expenses to see your breakdown</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
 
-              <form onSubmit={handleSubmit}>
-                <div className="type-toggle">
-                  <button
-                    type="button"
-                    className={formData.transaction_type === 'expense' ? 'active' : ''}
-                    onClick={() => setFormData(prev => ({ ...prev, transaction_type: 'expense' }))}
-                  >
-                    Expense
-                  </button>
-                  <button
-                    type="button"
-                    className={formData.transaction_type === 'income' ? 'active' : ''}
-                    onClick={() => setFormData(prev => ({ ...prev, transaction_type: 'income' }))}
-                  >
-                    Income
-                  </button>
-                </div>
-
+      {/* Edit Modal */}
+      {editingTransaction && editFormData && (
+        <div className="modal-overlay" onClick={() => setEditingTransaction(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Transaction</h3>
+              <button className="modal-close" onClick={() => setEditingTransaction(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <input
+                  type="text"
+                  name="description"
+                  value={editFormData.description}
+                  onChange={handleEditChange}
+                  className="form-input"
+                />
+              </div>
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Amount</label>
                   <input
                     type="number"
                     name="amount"
-                    value={formData.amount}
-                    onChange={handleInputChange}
+                    value={editFormData.amount}
+                    onChange={handleEditChange}
                     className="form-input"
-                    placeholder="0.00"
                     step="0.01"
                     min="0.01"
-                    required
                   />
                 </div>
-
                 <div className="form-group">
-                  <label className="form-label">Description</label>
+                  <label className="form-label">Date</label>
                   <input
-                    type="text"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
+                    type="date"
+                    name="date"
+                    value={editFormData.date}
+                    onChange={handleEditChange}
                     className="form-input"
-                    placeholder="What was this for?"
-                    required
                   />
                 </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Category</label>
-                    <select
-                      name="category_id"
-                      value={formData.category_id}
-                      onChange={handleInputChange}
-                      className="form-select"
-                      required
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Date</label>
-                    <input
-                      type="date"
-                      name="date"
-                      value={formData.date}
-                      onChange={handleInputChange}
-                      className="form-input"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary">
-                  Add Transaction
-                </button>
-              </form>
-            </div>
-
-            {/* Spending Chart */}
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">Spending by Category</h2>
               </div>
-
-              {chartData ? (
-                <div className="chart-container">
-                  <Doughnut data={chartData} options={chartOptions} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    name="category_id"
+                    value={editFormData.category_id}
+                    onChange={handleEditChange}
+                    className="form-select"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <div className="empty-state">
-                  <p className="empty-state-text">Add expenses to see your breakdown</p>
+                <div className="form-group">
+                  <label className="form-label">Type</label>
+                  <select
+                    name="transaction_type"
+                    value={editFormData.transaction_type}
+                    onChange={handleEditChange}
+                    className="form-select"
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
                 </div>
-              )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-delete"
+                onClick={() => {
+                  handleDelete(editingTransaction.id);
+                  setEditingTransaction(null);
+                }}
+              >
+                Delete
+              </button>
+              <div className="modal-footer-right">
+                <button className="btn-cancel" onClick={() => setEditingTransaction(null)}>Cancel</button>
+                <button className="btn-confirm" onClick={handleSaveEdit}>Save Changes</button>
+              </div>
             </div>
           </div>
         </div>
-      </main>
+      )}
     </div>
   );
 }

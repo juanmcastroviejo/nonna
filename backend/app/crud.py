@@ -92,6 +92,20 @@ def delete_transaction(db: Session, transaction_id: int) -> bool:
     return False
 
 
+def update_transaction(db: Session, transaction_id: int, transaction: schemas.TransactionCreate) -> models.Transaction:
+    """Update an existing transaction."""
+    db_transaction = get_transaction(db, transaction_id)
+    if db_transaction:
+        db_transaction.amount = transaction.amount
+        db_transaction.description = transaction.description
+        db_transaction.transaction_type = transaction.transaction_type
+        db_transaction.date = transaction.date
+        db_transaction.category_id = transaction.category_id
+        db.commit()
+        db.refresh(db_transaction)
+    return db_transaction
+
+
 # ============== Analytics Operations ==============
 
 def get_analytics_summary(
