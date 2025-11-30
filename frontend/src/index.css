@@ -68,6 +68,11 @@ body {
   height: 36px;
 }
 
+.nonna-logo {
+  height: 120px;
+  width: auto;
+}
+
 .logo h1 {
   font-family: 'DM Serif Display', serif;
   font-size: 1.5rem;

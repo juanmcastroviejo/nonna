@@ -1,20 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import logo from './assets/nonna-logo.png';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const API_URL = 'http://localhost:8000/api';
 
-// ============== Glasses Logo Component ==============
-const GlassesIcon = () => (
-  <svg viewBox="0 0 220 80" className="logo-icon" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="60" cy="45" rx="30" ry="28" stroke="#1a1a1a" strokeWidth="2"/>
-    <path d="M 30 35 Q 45 20 60 18 Q 75 20 90 35" stroke="#1a1a1a" strokeWidth="5" strokeLinecap="round"/>
-    <ellipse cx="160" cy="45" rx="30" ry="28" stroke="#1a1a1a" strokeWidth="2"/>
-    <path d="M 130 35 Q 145 20 160 18 Q 175 20 190 35" stroke="#1a1a1a" strokeWidth="5" strokeLinecap="round"/>
-    <line x1="90" y1="32" x2="130" y2="32" stroke="#1a1a1a" strokeWidth="2"/>
-  </svg>
+// ============== Logo Component ==============
+const NonnaLogo = () => (
+  <img src={logo} alt="Nonna" className="nonna-logo" />
 );
 
 // ============== Main App Component ==============
@@ -260,11 +255,8 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <div className="logo">
-            <GlassesIcon />
-            <h1>Nonna</h1>
-          </div>
-          <span className="tagline">Financial wisdom, passed down.</span>
+          <NonnaLogo />
+          <span className="tagline">Alla fine, tutto torna.</span>
         </div>
       </header>
 
