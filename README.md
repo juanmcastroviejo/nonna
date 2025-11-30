@@ -1,27 +1,33 @@
-# Nonna 👓
+<h1 align="center">Nonna</h1>
 
-**Financial wisdom, passed down.**
+<p align="center">
+  <em>Alla fine, tutto torna.</em>
+</p>
 
-Nonna is a personal finance tracker that helps you understand where your money goes. Named after my grandmother who was a bank manager — she taught me that tracking your spending is the first step to financial freedom.
+---
+
+Inspired by my grandmother, Nonna is an AI-powered personal finance tracker that helps you understand where your money goes.
 
 ## Features
 
-- **Transaction Management** — Add, view, and delete financial transactions
-- **Category Organization** — Organize spending by categories (Food, Bills, Entertainment, etc.)
-- **Spending Analytics** — Visual breakdown of where your money goes
-- **Clean Dashboard** — Simple, intuitive interface to manage your finances
+- **AI-Powered Transaction Entry** — Type naturally like "Starbucks $8.45" and Nonna automatically categorizes it using OpenAI
+- **Smart Categorization** — Automatically detects income vs. expenses and assigns appropriate categories
+- **Full CRUD Operations** — Create, read, update, and delete transactions with an intuitive interface
+- **Spending Analytics** — Visual breakdown of spending by category with interactive charts
+- **Real-time Dashboard** — Summary cards showing total income, expenses, and net balance
 
 ## Tech Stack
 
 **Backend:**
 - Python 3.12
 - FastAPI
-- SQLite (with SQLAlchemy ORM)
+- SQLite with SQLAlchemy ORM
+- OpenAI API (GPT-3.5 Turbo)
 - Pydantic for data validation
 
 **Frontend:**
 - React 18
-- Chart.js for visualizations
+- Chart.js for data visualization
 - CSS3 with custom properties
 
 ## Getting Started
@@ -31,74 +37,80 @@ Nonna is a personal finance tracker that helps you understand where your money g
 - Python 3.9+
 - Node.js 18+
 - Git
+- OpenAI API key
 
 ### Installation
 
 1. **Clone the repository**
-   ```bash
+```bash
    git clone https://github.com/juanmcastroviejo/nonna.git
    cd nonna
-   ```
+```
 
 2. **Set up the backend**
-   ```bash
+```bash
    cd backend
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
-   ```
+   pip install openai
+```
 
 3. **Set up the frontend**
-   ```bash
+```bash
    cd ../frontend
    npm install
-   ```
+```
 
 ### Running the Application
 
 1. **Start the backend** (from the `backend` directory):
-   ```bash
+```bash
    source venv/bin/activate
-   uvicorn app.main:app --reload
-   ```
+   OPENAI_API_KEY=your_api_key_here uvicorn app.main:app --reload
+```
    API will be available at `http://localhost:8000`
 
 2. **Start the frontend** (from the `frontend` directory):
-   ```bash
+```bash
    npm start
-   ```
+```
    App will open at `http://localhost:3000`
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/parse` | Parse natural language into transaction data (AI) |
 | GET | `/api/transactions` | Get all transactions |
 | GET | `/api/transactions/{id}` | Get a specific transaction |
 | POST | `/api/transactions` | Create a new transaction |
+| PUT | `/api/transactions/{id}` | Update a transaction |
 | DELETE | `/api/transactions/{id}` | Delete a transaction |
 | GET | `/api/analytics/summary` | Get spending summary by category |
 | GET | `/api/categories` | Get all categories |
 
 ## Project Structure
-
 ```
 nonna/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py          # FastAPI application
-│   │   ├── models.py        # SQLAlchemy models
-│   │   ├── schemas.py       # Pydantic schemas
+│   │   ├── main.py          # FastAPI application & routes
+│   │   ├── models.py        # SQLAlchemy database models
+│   │   ├── schemas.py       # Pydantic validation schemas
 │   │   ├── database.py      # Database configuration
-│   │   └── crud.py          # Database operations
+│   │   ├── crud.py          # Database operations
+│   │   └── ai_parser.py     # OpenAI integration for NLP
 │   └── requirements.txt
 ├── frontend/
 │   ├── public/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── App.js
-│   │   └── index.js
+│   │   ├── assets/
+│   │   │   └── nonna-text-logo.png
+│   │   ├── App.js           # Main React component
+│   │   ├── index.js
+│   │   └── index.css
 │   └── package.json
 └── README.md
 ```
@@ -108,5 +120,3 @@ nonna/
 MIT
 
 ---
-
-*Built with love, inspired by Nonna's wisdom.* 👓
